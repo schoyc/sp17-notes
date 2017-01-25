@@ -223,12 +223,16 @@ A pointer is just a memory address where data of a specific data type is stored.
 
 Pointers are useful for passing \textit{references} to data in between functions. Since in C, arguments are passed by value, if you were to pass an array of 1,000 elements to a function, then that entire array (of thousands of bytes) would be copied into a parameter in the function call (in stack memory). Whereas, if you were to pass a pointer to that array instead to the function, only the pointer (of just 4 bytes) would be copied into a parameter. Passing a pointer into a function is similar to pass by reference in other languages, like Java and Python.
 
-There are also two operators regularly used with pointers, the \texttt{\&} and \texttt{*} operators. The \texttt{\&} operator takes the address of a given variable. For example, following Program II in Figure 3, \texttt{y} would evaluate to 4 but \texttt{\&y} would evaluate to the memory address where \texttt{y} is stored. The \texttt{*} or dereference operator can be thought of as the inverse of \texttt{\&}. Given a pointer or memory address, \texttt{*} will dereference that pointer by going to the corresponding address in memory and returning the actual value stored at that address. For example, following Program II, \texttt{y\_addr} would contain some address, say \texttt{0xbfffffec}, while \texttt{*y\_addr} would return 4 (since the value in memory stored at \texttt{0xbfffffec} is 4). \texttt{*y} would error out, as \texttt{y} is an \texttt{int} not a \texttt{int*}.
+There are also two operators regularly used with pointers, the \texttt{\&} and \texttt{*} operators. The \texttt{\&} operator takes the address of a given variable. For example, following Program II in Figure 3, \texttt{y} would evaluate to 4 but \texttt{\&y} would evaluate to the memory address where \texttt{y} is stored. 
+
+The \texttt{*} or dereference operator can be thought of as the inverse of \texttt{\&}. Given a pointer or memory address, \texttt{*} will dereference that pointer by going to the corresponding address in memory and returning the actual value stored at that address. For example, following Program II, \texttt{y\_addr} would contain some address, say \texttt{0xbfffffec}, while \texttt{*y\_addr} would return 4 (since the value in memory stored at \texttt{0xbfffffec} is 4). \texttt{*y} would error out, as \texttt{y} is an \texttt{int} not a \texttt{int*}.
 
 Also, when using the \texttt{*} operator, make sure that the pointer you are attempting to dereference is a valid address (i.e. the address of an existing variable or allocated stack/heap/static memory). Dereferencing an invalid pointer, either with value \texttt{NULL} or an address to unmapped/unallocated memory, will result in a \textit{segmentation fault}.
 
 \subsection{Pointer Arithmetic}
-In C, integers can be added and subtracted from pointers in order to move a number of bytes from a given address. Specifically, \texttt{\{pointer of data type\} + k}, would return \texttt{\{the address stored in the pointer\} + \{k * sizeof(data type) bytes\}}. For example, following Program II, \texttt{y\_addr + 2} would take the address stored in \texttt{y\_addr}, \texttt{0xbfffffec}, and then add 2 * \texttt{sizeof(int)} = 2 * 4 bytes = 8 bytes to that address, to ultimately return \texttt{0xbfffffec + 8 = 0xbffffff4}. 
+In C, integers can be added and subtracted from pointers in order to move a number of bytes from a given address. Specifically, \texttt{\{pointer of data type\} + k}, would return \texttt{\{the address stored in the pointer\} + \{k * sizeof(data type) bytes\}}. 
+
+For example, following Program II, \texttt{y\_addr + 2} would take the address stored in \texttt{y\_addr}, \texttt{0xbfffffec}, and then add 2 * \texttt{sizeof(int)} = 2 * 4 bytes = 8 bytes to that address, to ultimately return \texttt{0xbfffffec + 8 = 0xbffffff4}. 
 
 \subsection{Arrays}
 An array is a list of elements similar to an array in Java, where all of the elements must be of the same data type and the length of the array is fixed at declaration. They are declared as \texttt{\{data type\} arr[length]} and their contents can be accessed with \texttt{arr[index]}. (see Program II)
@@ -290,6 +294,17 @@ struct bear* makeHeapOski() {
   /* Since oski is allocated on the heap,
      its data will persist after this function call */
   return oski;
+}
+
+void oskiInMemory() {
+  struct bear* oskiGood = makeHeapOski();
+  struct bear* oskiBad = makeHeapOski();
+  
+  /* Do some stuff */
+  
+  free(oskiGood); /* Used heap memory is freed */
+  return; /* oskiBad hasn't been freed -- memory leak! */
+  
 }
 \end{lstlisting}
 \captionof{figure}{Using malloc()}
