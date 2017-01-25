@@ -1,0 +1,13 @@
+\contentsline {section}{\numberline {1}What is memory?}{1}
+\contentsline {section}{\numberline {2}The Layout of Memory}{2}
+\contentsline {subsection}{\numberline {2.1}The Code Segment}{2}
+\contentsline {subsection}{\numberline {2.2}The Data Segment}{2}
+\contentsline {subsection}{\numberline {2.3}The Stack}{2}
+\contentsline {subsection}{\numberline {2.4}The Heap}{3}
+\contentsline {section}{\numberline {3}Important Data Types and Concepts in C}{3}
+\contentsline {subsection}{\numberline {3.1}Pointers}{3}
+\contentsline {subsection}{\numberline {3.2}Pointer Arithmetic}{3}
+\contentsline {subsection}{\numberline {3.3}Arrays}{3}
+\contentsline {subsection}{\numberline {3.4}Strings}{5}
+\contentsline {subsection}{\numberline {3.5}Structs}{5}
+\contentsline {subsection}{\numberline {3.6}malloc()}{5}

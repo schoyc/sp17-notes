@@ -1,0 +1,298 @@
+\documentclass{article}
+\usepackage[top=1in,bottom=1in,left=1in,right=1in]{geometry}
+\usepackage{amssymb}	% for \mathbb{}
+\usepackage{enumerate}	% for \begin{enumerate}[(a)]
+\usepackage{mathtools}
+\usepackage{bytefield}
+\usepackage{rotating}
+\usepackage{listings}
+\usepackage{subcaption}
+\usepackage{caption}
+
+\title{Memory \& C}
+\author{CS61C Spring 2017}
+\date{ }
+\begin{document}
+\maketitle
+\tableofcontents
+
+
+\section{What is memory?}
+
+In this class, when we say memory we are referring to dynamic random-access memory (DRAM), which are large blocks of electronic cells, with each cell representing either a zero or one depending on the voltage across the cell's capacitor. Memory is where programs store data. When you create a list in Python or a HashMap in Java, memory is where you store these variables!
+
+More importantly for this class, memory is structured as bytes (units of 8 bits) of data. Each byte is labeled or addressed with a number from 0 to $N$, where $N$ is just the number of bytes of total memory your machine has. In this class, we will generally assume our machines to have $2^{32}$ bytes of memory, or $N = 2^{32}$ (for reasons explained in later units).  This addressing is called \textit{byte-addressing}, where each byte of data can be found at a specific address. The data stored in memory can be of many different data types, such as a \texttt{char}, an \texttt{int}, or a pointer:
+\begin{itemize} 
+\item \texttt{char} represented by 1 byte of data, it has $2^8 = 256$ different values. We convert the byte's numerical value (0 to 255) to a character literal (e.g. 'A', 'B', 'C'), using the ASCII table.
+\item \texttt{int} represented by 4 bytes of data, the value of the integer is the 32 bit number (in 2's complement) corresponding to the 4 bytes.  
+\item \textit{pointer} represented by 4 bytes of data, this data type specifically stores addresses. The 32 bit number corresponding to the 4 bytes is interpreted as an unsigned number (from $0$ to $2^{32} - 1$) that is the address for (i.e. points to) a specific byte of data in memory. 
+\end{itemize}
+
+For example, let's say we had the following 4 bytes of data: \texttt{0x87617661}. If we interpret these 4 bytes, as 4 char's then we would have '\c{c}', 'a', 'v', 'a'. If we interpret them as an integer, then we would have the signed 32 bit number: \texttt{0b 1000 0111 0110 0001 0111 0110 0110 0001} = -2,023,655,839. If we interpret them as a pointer, then these 4 bytes are the address of byte number 2,271,311,457. 
+
+In the diagram below, the memory addresses of the bytes are on the left hand side, while the actual values of those bytes are in the table. The offsets at the top simply indicate that the exact address of that byte is the memory address on the left + the offset matching the byte's column. For example, the byte in the 0th row, 3rd column of the table is at address \texttt{0x7FFFFFFC + 3 = 0x7FFFFFFF} (you're going to get really good at hex in this class), with value 0x04. 
+
+\newcommand{\bitlabel}[2]{\bitbox[]{#1}{\raisebox{0pt}[4ex][0pt]{\turnbox{45}{\fontsize{7}{7}\selectfont#2}}}}
+\begin{center}
+\begin{bytefield}[bitwidth=1.1em, rightcurly=., rightcurlyspace=0pt,  leftcurly=., leftcurlyspace=0pt]{8}
+\bitlabel{2}{+0} & \bitlabel{2}{+1} &
+\bitlabel{2}{+2} & \bitlabel{2}{+3} \\
+\begin{leftwordgroup}{0x7FFFFFFC}
+\begin{rightwordgroup}{int x = 4;}
+\bitboxes{2}{{00} {00} {00} {04}}
+\end{leftwordgroup}
+\end{rightwordgroup} \\
+\begin{leftwordgroup}{0x7FFFFFF8}
+\begin{rightwordgroup}{int y = -1;}
+\bitboxes{2}{{FF} {FF} {FF} {FF}}
+\end{leftwordgroup}
+\end{rightwordgroup} \\
+\begin{leftwordgroup}{0x7FFFFFF4}
+\begin{rightwordgroup}{int* p = 0x7FFFFFFC;}
+\bitboxes{2}{{7F} {FF} {FF} {FC}}
+\end{leftwordgroup}
+\end{rightwordgroup} \\
+\begin{leftwordgroup}{0x7FFFFFF0}
+\begin{rightwordgroup}{garbage}
+\bitboxes{2}{{00} {AB} {CD} {EF}}
+\end{leftwordgroup}
+\end{rightwordgroup} \\
+\begin{leftwordgroup}{0x7FFFFFEC}
+\begin{rightwordgroup}{(string literal) "ILUV61C!"}
+\bitboxes{2}{{'6'} {'1'} {'C'} {'!'}}
+\end{leftwordgroup}
+\end{rightwordgroup} \\
+\begin{leftwordgroup}{0x7FFFFFE8}
+\begin{rightwordgroup}{Note: in memory, each character is actually a numerical value}
+\bitboxes{2}{{'I'} {'L'} {'U'} {'V'}}
+\end{leftwordgroup}
+\end{rightwordgroup} \\
+\begin{leftwordgroup}{0x7FFFFFE4}
+\begin{rightwordgroup}{char* s = 0x7FFFFFE8;}
+\bitboxes{2}{{7F} {FF} {FF} {E8}}
+\end{leftwordgroup}
+\end{rightwordgroup} \\
+\bitbox{8}{...}
+
+\end{bytefield}
+\captionof{figure}{An example memory contents.}
+\end{center}
+\section{The Layout of Memory}
+Now that we know what memory looks like, we can see how memory is actually laid out or organized for a program. The $2^{32}$ bytes of memory are divided into 4 main sections: the stack, the heap, the data segment, and the code segment. An example memory layout is shown in Figure 4.
+
+\subsection{The Code Segment}
+This is where the actual code that comprises the program is stored. Your computer will actually know how to execute your program by reading the data at this segment of memory. Like all data in memory, your program is stored as just bytes of data. Later in this class, you'll learn how your program is compiled into assembly language, assembled into binary, and then loaded into this segment.
+
+\subsection{The Data Segment}
+This is where statically declared data is stored. By static, we mean variables/data that are declared outside of your program's main function and that are accessible to all methods/scopes of your program. The data here are often constants that are shared by all parts of your program (although like in Java, static does not mean constant). 
+
+\subsection{The Stack}
+This is where local variables are stored. By local, we mean variables that are declared within the scope of a function. Since these variables are only necessary for a function call, the data in this segment is not preserved after the function call finishes. This means that after a function call ends, the memory allocated for these local variables  will be reclaimed and the corresponding data can (and likely will) be overwritten in later function calls. For example, when you change the value of a local variable inside a function, that change in value only persists within the scope of the function. 
+
+Additionally, unlike the other segments, the stack grows downwards, from higher addresses to lower addresses, meaning that new data is stored at lesser addresses than previously stored data.  For example, in Program I and Figure 4, \texttt{x} was declared before \texttt{s\_static}, but \texttt{x} is stored at the higher address \texttt{0xFFFFFFFC} while \texttt{y} would be stored at the lower address \texttt{0xFFFFFFF8}. 
+
+\subsection{The Heap}
+This is where dynamically allocated data is stored. By dynamically allocated, we generally refer to variables/memory that is allocated using \texttt{malloc()}. Unlike data in the stack, data in the heap will persist after a function call ends and is not automatically reclaimed. Therefore, programs must explicitly use \texttt{free()} to free the memory in the heap when that data is no longer needed. 
+
+\begin{figure}
+\centering
+\begin{minipage}{0.44\textwidth}
+\renewcommand{\ttdefault}{pcr}
+\begin{lstlisting}[language=C, basicstyle=\ttfamily,  keywordstyle=\bfseries, showstringspaces=false]
+int z = -1;
+int main(int argc, char* argv) {
+  int x = 3 * sizeof(int);
+  char* s_static = "61C";
+  char s_stack[4];
+  s_stack = "61B".
+  
+  int *heap_arr = malloc(x);
+  heap_arr[0] = 1;
+  heap_arr[1] = 2;
+  heap_arr[2] = 4;
+}
+\end{lstlisting}
+\caption{Program I}
+\vspace{29.5mm}
+\begin{lstlisting}[language=C, basicstyle=\ttfamily]
+struct bear {
+  char* name;
+  struct bear* buddy;
+};
+
+int main(int argc, char* argv) {
+  int y = 4;
+  int *y_addr = &y;
+	
+  int arr[4];
+  arr[0] = 1;
+  arr[1] = 2;
+  arr[2] = 3;
+  arr[3] = 4;
+  int* a = &(arr[0]);
+	
+  int n = sizeof(struct bear);
+  struct bear stack_bear;
+  struct bear* heap_bear = malloc(n);
+  
+  stack_bear.name = "Golden Bear";
+  stack_bear.buddy = heap_bear;
+  heap_bear->name = "Oski";
+  heap_bear->buddy = &stack_bear;
+}
+\end{lstlisting}
+\caption{Program II}
+\end{minipage}\hfill
+%
+\begin{minipage}{0.4\textwidth}
+\raggedright
+\begin{bytefield}[bitwidth=1.1em, rightcurly=., rightcurlyspace=0pt]{8}
+\begin{rightwordgroup}{\texttt{0xFFFFFFFF}}
+\wordbox[]{1}{}
+\end{rightwordgroup} \\
+\begin{leftwordgroup}{Stack}
+\begin{rightwordgroup}{int x}
+\bitboxes{2}{{00} {00} {00} {0C}}
+\end{rightwordgroup} \\
+\begin{rightwordgroup}{char* s\_static}
+\bitboxes{2}{{5F} {FF} {FF} {FC}}
+\end{rightwordgroup} \\
+\begin{rightwordgroup}{char s\_stack[]}
+\bitboxes{2}{{FF} {FF} {FF} {F0}}
+\end{rightwordgroup} \\
+\begin{rightwordgroup}{"61B"}
+\bitboxes{2}{{'6'} {'1'} {'B'} {00}}
+\end{rightwordgroup} \\
+\begin{rightwordgroup}{int* heap\_arr}
+\bitboxes{2}{{8F} {FF} {FF} {F4}}
+\end{rightwordgroup} \\
+\begin{rightwordgroup}{\texttt{0xFFFFFFE8}}
+\wordbox[lr]{1}{}
+\end{rightwordgroup} \\
+\wordbox[lr]{7}{\vdots}
+\end{leftwordgroup} \\
+\begin{leftwordgroup}{Heap}
+\wordbox[lrt]{6}{\vdots} \\
+\begin{rightwordgroup}{\texttt{0x90000000}}
+\wordbox[lr]{1}{}
+\end{rightwordgroup} \\
+\begin{rightwordgroup}{heap\_arr[2]}
+\bitboxes{2}{{00} {00} {00} {04}}
+\end{rightwordgroup} \\
+\begin{rightwordgroup}{heap\_arr[1]}
+\bitboxes{2}{{00} {00} {00} {02}}
+\end{rightwordgroup} \\
+\begin{rightwordgroup}{heap\_arr[0]}
+\bitboxes{2}{{00} {00} {00} {01}}
+\end{rightwordgroup} 
+\end{leftwordgroup} \\
+
+\begin{leftwordgroup}{Data}
+\wordbox[lrt]{3}{\vdots} \\
+\begin{rightwordgroup}{\texttt{0x60000000}}
+\wordbox[lr]{1}{}
+\end{rightwordgroup} \\
+\begin{rightwordgroup}{"61C"}
+\bitboxes{2}{{'6'} {'1'} {'C'} {00}}
+\end{rightwordgroup}\\
+\begin{rightwordgroup}{int z}
+\bitboxes{2}{{FF} {FF} {FF} {FF}}
+\end{rightwordgroup}
+\end{leftwordgroup} \\
+
+\begin{leftwordgroup}{Code}
+\bitbox{8}{instructions ...} \\ 
+\bitbox{8}{instructions ...} \\
+\begin{rightwordgroup}{\texttt{0x00000000}}
+\bitbox{8}{int z = - 1; ...}
+\end{rightwordgroup}
+\end{leftwordgroup}
+\end{bytefield}
+
+\caption{Memory after Program I}
+\end{minipage}
+%
+
+\end{figure}
+
+\section{Important Data Types and Concepts in C}
+Unlike many languages, C allows programmers to interact directly with memory. This isn't a C class, but the language is very useful to know while learning memory (and many other concepts later in this class). There are many data types in C, but some are particularly common.
+
+\subsection{Pointers}
+A pointer is just a memory address where data of a specific data type is stored. In C, a pointer is declared by: \texttt{\{data type\} *\{pointer name\}}, where data type is the data type of the data at the pointer's address, and pointer name is just the name of the pointer variable. For example, \texttt{int* x} would declare a pointer to an int, such that the value of \texttt{x} is the address of some integer. Additionally, \texttt{int* x} is the same as \texttt{int *x}, but the latter is used more often for clarity \footnote{If you needed to declare two pointer variables, you may write \texttt{int* p1, p2;}. However, this will actually evaluate to \texttt{int* p1; int p2;}. Instead, if you write \texttt{int *p1, *p2} you will get the intended behavior \texttt{int* p1; int* p2;}}. \texttt{NULL} is commonly used as the default value of a pointer when the pointer's actual values has not yet been set.
+
+Pointers are useful for passing \textit{references} to data in between functions. Since in C, arguments are passed by value, if you were to pass an array of 1,000 elements to a function, then that entire array (of thousands of bytes) would be copied into a parameter in the function call (in stack memory). Whereas, if you were to pass a pointer to that array instead to the function, only the pointer (of just 4 bytes) would be copied into a parameter. Passing a pointer into a function is similar to pass by reference in other languages, like Java and Python.
+
+There are also two operators regularly used with pointers, the \texttt{\&} and \texttt{*} operators. The \texttt{\&} operator takes the address of a given variable. For example, following Program II in Figure 3, \texttt{y} would evaluate to 4 but \texttt{\&y} would evaluate to the memory address where \texttt{y} is stored. The \texttt{*} or dereference operator can be thought of as the inverse of \texttt{\&}. Given a pointer or memory address, \texttt{*} will dereference that pointer by going to the corresponding address in memory and returning the actual value stored at that address. For example, following Program II, \texttt{y\_addr} would contain some address, say \texttt{0xbfffffec}, while \texttt{*y\_addr} would return 4 (since the value in memory stored at \texttt{0xbfffffec} is 4). \texttt{*y} would error out, as \texttt{y} is an \texttt{int} not a \texttt{int*}.
+
+Also, when using the \texttt{*} operator, make sure that the pointer you are attempting to dereference is a valid address (i.e. the address of an existing variable or allocated stack/heap/static memory). Dereferencing an invalid pointer, either with value \texttt{NULL} or an address to unmapped/unallocated memory, will result in a \textit{segmentation fault}.
+
+\subsection{Pointer Arithmetic}
+In C, integers can be added and subtracted from pointers in order to move a number of bytes from a given address. Specifically, \texttt{\{pointer of data type\} + k}, would return \texttt{\{the address stored in the pointer\} + \{k * sizeof(data type) bytes\}}. For example, following Program II, \texttt{y\_addr + 2} would take the address stored in \texttt{y\_addr}, \texttt{0xbfffffec}, and then add 2 * \texttt{sizeof(int)} = 2 * 4 bytes = 8 bytes to that address, to ultimately return \texttt{0xbfffffec + 8 = 0xbffffff4}. 
+
+\subsection{Arrays}
+An array is a list of elements similar to an array in Java, where all of the elements must be of the same data type and the length of the array is fixed at declaration. They are declared as \texttt{\{data type\} arr[length]} and their contents can be accessed with \texttt{arr[index]}. (see Program II)
+
+Like many data types in C, arrays can be thought of as a special type of pointer, that points to the 0th element of the array.  For example, in Program II, \texttt{arr == a}.
+
+When an array is declared, enough space in memory is allocated to store the contents of the array. Specifically, declaring \texttt{\{data type\} arr[length]} would allocate \texttt{length * sizeof(data type)} bytes of memory for the contents of \texttt{arr}. In Program I, declaring \texttt{char s\_stack[4]} allocated 4 bytes of stack memory at \texttt{0xFFFFFFF0}, that were then filled with '6', '1', 'B', '\textbackslash0'. Indexing into an array is then just pointer arithmetic, as \texttt{arr[index]} is equivalent to \texttt{*(arr + index)}.
+
+\subsection{Strings} 
+Unlike in most other languages, like Python and Java, strings are not their own data type in C. Instead, strings are simply considered pointers to the 0th char of the string's actual value, with the string's literal value being a contiguous sequence of \texttt{char}'s. The end of a string is then indicated by the null terminator, \texttt{'\textbackslash0'}, which is just a byte with value 0x00. For example, \texttt{"61C"} and \texttt{"61B"} are both null-terminated strings in Figure 4.
+
+Additionally, for strings, compilers generally store string literals in the static segment of memory even if the literal is declared inside a function call (and would normally go into the stack). This optimization is made because if a string literal is used, its value will likely not change during the program. However, one exception to this optimization, is if a string literal is stored in a \texttt{char[]} instead of a \texttt{char*}. Since an array allocates space for the array's contents, the string literal will be stored in that allocated space in the stack instead of in the static segment. Figure 4 shows the difference between the two with \texttt{char* s\_static} and \texttt{char s\_stack[]}.
+
+\subsection{Structs}
+Similar to objects in other languages, structs are used to associate many primitive data types (e.g. chars, ints, pointers) into a new data type. For example, the \texttt{struct bear} in Program II, has a string variable for a name, and a pointer to another instance of \texttt{struct bear}. In C, each of these "instance variables" is called a member of the struct (e.g. the \texttt{buddy} member). 
+
+After declaring a struct, you can then access its members using the \texttt{.} operator. It's also very common for programs to use pointers to structs. When accessing a member from a struct pointer, the \texttt{->} operator is used. For example, following Program II, \texttt{heap\_bear->name;} would return "Oski" and is equivalent to \texttt{(*heap\_bear).name;}. 
+
+Additionally, in memory, structs are stored as tightly packed, meaning that all the members of the struct are stored together in a contiguous chunk of memory. Figure 5 shows an example of an instance of the bear struct in memory.
+
+\begin{center}
+\begin{bytefield}[bitwidth=1.1em, rightcurly=., rightcurlyspace=0pt]{8}
+\bitbox{8}{...}\\
+\begin{leftwordgroup}{struct bear}
+\begin{rightwordgroup}{char* name;}
+\bitboxes{2}{{'D'} {'o'} {'e'} {'\textbackslash0'}}
+\end{rightwordgroup} \\
+\begin{rightwordgroup}{struct bear* buddy;}
+\bitboxes{2}{{BF} {FF} {FF} {EC}}
+\end{rightwordgroup}
+\end{leftwordgroup}
+\end{bytefield}
+\captionof{figure}{An example memory contents.}
+\end{center}
+
+\subsection{malloc()}
+\texttt{malloc} is a function in C that allows you to dynamically allocate memory (i.e. allocate memory from the heap). It takes in one argument, the number of bytes of heap memory that you wish to allocate, and then returns the address of where that allocated block starts. Although this class assumes data type sizes of a 32 bit machine, the number of bytes that represents a given data type can vary between machines, so when specifying the number of bytes to allocate for \texttt{malloc}, the \texttt{sizeof(\{data type\})} function is used, which returns the number of bytes that the given data type takes. For example, to allocate enough space for an array of four integers: \texttt{int* arr = malloc(4 * sizeof(int))}. Figure 6 shows an example of a situation that requires \texttt{malloc}: since stack variables do not persist after the end of the function call, a heap variable must be used when creating a return value for a function. 
+
+As mentioned earlier, heap memory is not automatically reclaimed and persists beyond a function call. Therefore, at some point before the program finishes, you must call \texttt{free()} on the address that you obtained from calling \texttt{malloc()}. For example, to free the previous array of four integers: \texttt{free(arr);}. Failure to call \texttt{free()} will result in a \textbf{memory leak}, where the heap memory allocated by \texttt{malloc} remains unavailable even though it is no longer in use.
+\begin{center}
+\renewcommand{\ttdefault}{pcr}
+\begin{lstlisting}[language=C, basicstyle=\ttfamily,  keywordstyle=\bfseries, showstringspaces=false]
+struct bear* makeStackOski() {
+  struct bear oski;
+  oski.name = "Oski"
+  oski.buddy = NULL;
+  
+  /* Since oski is allocated on the stack, 
+      its data is not guaranteed to persist 
+      (i.e. may be garbage) after this function call */
+  return &oski; 
+}
+
+struct bear* makeHeapOski() {
+  struct bear* oski = malloc(sizeof(struct bear));
+  oski->name = "Oski";
+  oski->buddy = NULL;
+  
+  /* Since oski is allocated on the heap,
+     its data will persist after this function call */
+  return oski;
+}
+\end{lstlisting}
+\captionof{figure}{Using malloc()}
+\end{center}
+
+\end{document}
