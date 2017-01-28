@@ -1,0 +1,21 @@
+\contentsline {section}{\numberline {1}What is MIPS}{1}
+\contentsline {subsection}{\numberline {1.1}Registers}{2}
+\contentsline {subsection}{\numberline {1.2}Instructions}{2}
+\contentsline {section}{\numberline {2}MIPS Instructions \& Programs}{2}
+\contentsline {subsection}{\numberline {2.1}Arithmetic Instructions \& Sign Extension}{4}
+\contentsline {subsection}{\numberline {2.2}Memory Instructions}{4}
+\contentsline {subsection}{\numberline {2.3}The Program Counter}{4}
+\contentsline {subsection}{\numberline {2.4}Control Flow Instructions}{5}
+\contentsline {subsection}{\numberline {2.5}Signed vs. Unsigned}{5}
+\contentsline {subsection}{\numberline {2.6}Jump Instructions and Function Calls}{6}
+\contentsline {subsection}{\numberline {2.7}Calling Convention}{6}
+\contentsline {subsection}{\numberline {2.8}Pseudoinstructions}{7}
+\contentsline {section}{\numberline {3}Converting MIPS to binary}{8}
+\contentsline {subsection}{\numberline {3.1}R-Type}{8}
+\contentsline {subsection}{\numberline {3.2}I-Type}{8}
+\contentsline {subsection}{\numberline {3.3}J-Type}{9}
+\contentsline {section}{\numberline {4}CALL: Translating C programs to Binary}{9}
+\contentsline {subsection}{\numberline {4.1}Compiler}{9}
+\contentsline {subsection}{\numberline {4.2}Assembler}{9}
+\contentsline {subsection}{\numberline {4.3}Linker}{10}
+\contentsline {subsection}{\numberline {4.4}Loader}{10}

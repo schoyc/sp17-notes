@@ -1,0 +1,465 @@
+\documentclass{article}
+\usepackage[top=1in,bottom=1in,left=1in,right=1in]{geometry}
+\usepackage{amssymb}	% for \mathbb{}
+\usepackage{enumerate}	% for \begin{enumerate}[(a)]
+\usepackage{mathtools}
+\usepackage{bytefield}
+\usepackage{rotating}
+\usepackage{listings}
+\usepackage{subcaption}
+\usepackage{caption}
+
+\newpage
+\title{MIPS}
+\author{CS61C Spring 2017}
+\date{ }
+\begin{document}
+\maketitle
+\tableofcontents
+
+\section{What is MIPS}
+In order to actually run a program, a program must be converted into an executable or binary that a computer can execute. To accomplish this, every computer uses a specific instruction set architecture (ISA). An ISA consists of two main parts: 1) a constrained set of assembly language instructions, that the program will be compiled into; 2) a CPU that understands that assembly language and can execute the compiled instructions. By limiting the possible instructions to a set of specific instructions, it can be guaranteed that the CPU will be able to execute each of those instructions and thus execute the entire program.
+
+MIPS is the ISA that we use in this class, and runs on a 32 bit architecture. Nowadays, most machines generally use x86 and run on a 32 bit or 64 bit architecture, but x86 is a more complex ISA, so we teach the more intuitive MIPS instead. Just like in C programs, MIPS programs are read sequentially from one line to the next.  Additionally, \textbf{labels} can be used to label a certain line in the MIPS program for both readability and easy access for a program to know where a specific line is.
+
+\subsection{Registers}
+While executing a program, the CPU will use registers to hold intermediate values while executing a program. These values are generally memory addresses or integers. Physically, registers are memory units smaller than DRAM (they can hold only 32 bits of data), but much faster to use than DRAM. The MIPS architecture has 32 of these registers, each with a designated purpose. Each register has a unique number, from 0 to 31, as well as a more common name that describes the register's purpose (e.g. register 29 is known as \$sp, the stack pointer register). Registers are indicated by a \$. Some of the most common registers include: 
+
+\begin{itemize}
+\item \textit{\$t registers}|the temporary registers, these are used to hold intermediate or temporary values between computations.
+\item \textit{\$s registers}|the saved registers, these are used to hold intermediate values that are guaranteed to be preserved across function calls (explained more in Calling Convention).
+\item \textit{\$a registers}|the argument registers, before calling a function, argument values are placed in these registers.
+\item \textit{\$v registers}|the return value registers, before a function returns, the return value is placed in \$v0 (\$v1 is used for returning other system call metadata).
+\item \textit{\$sp register}|the stack pointer register, keeps track of the address of the current limit of the stack (the memory addresses greater than this register's value are in use, while those less than are free to use).
+\item \textit{\$ra register}|the return address register, keeps track of the instruction address to return to after the program finishes a function call.
+\end{itemize}
+
+\begin{figure}
+\centering
+\begin{minipage}{0.45\textwidth}
+\renewcommand{\ttdefault}{pcr}
+\begin{lstlisting}[language=C, basicstyle=\ttfamily, numbers=left, stepnumber=1, firstnumber=1, numberfirstline=true]
+struct node {
+  int val;
+  struct node* next;
+};
+
+void initLL(int len) {
+  if (len == 0)
+    return NULL;
+  struct node* head = getNode();
+  struct node* cur = head;
+  while (len > 0) {
+    cur->next = getNode();
+    cur = cur->next;
+    len -= 1;
+   }
+  return head;
+}
+
+void valToLen(struct node* nd) {
+  if (nd == NULL)
+    return 0;
+  else {
+    nd->val = valToLen(nd->next);
+    return 1 + nd->val;
+   }
+}
+
+int main(int argc, char* argv[]) {
+  struct node* ll = initLL(4);
+  valToLen(ll);
+}
+  
+\end{lstlisting}
+\caption{C Program (Linked List)}
+\vfill
+\end{minipage}\hfill
+%
+\begin{minipage}{0.45\textwidth}
+\raggedright
+\renewcommand{\ttdefault}{pcr}
+\begin{lstlisting}[language=C, basicstyle=\ttfamily, keywordstyle=\bfseries, showstringspaces=false, morekeywords={jal, addu, move, bne, j, sw, addiu, lw, jr}, numbers=left, stepnumber=1, firstnumber=1, numberfirstline=true, numberstyle=\small]
+main:		addiu $a0 $0 4
+		jal initLL
+		addu $s0 $v0 $0
+		move $a0 $s0
+		jal valToLen
+initLL: 	bne $a0 $0 prolog1
+		move $v0 $0
+		j done
+prolog1:  	addiu $sp $sp -12
+		sw $s0 0($sp)
+		sw $s1 4($sp)
+		sw $s2 8($sp)
+		move $s0 $a0 # s0 = len
+		jal getNode
+		move $s1 $v0 # s1 = head
+		move $s2 $s0 # s2 = cur	
+loop:		jal getNode
+		sw $v0 4($s2)
+		lw $s2 4($s2)
+		addiu $s0 $s0 -1
+		bne $s0 $0 loop
+		move $v0 $s1
+epilog1:	lw $s2 8($sp)
+		lw $s1 4($sp)
+		lw $s0 0($sp)
+		addiu $sp $sp 12
+done:		jr $ra 
+valToLen:	move $t0 $a0
+if_:		bne $t0 $0 prolog2
+		move $v0 $0
+		j end
+prolog2:	addiu $sp $sp -4
+		sw $s0 0($sp)
+else_:		move $s0 $a0
+		lw $a0 4($s0)
+recurse:	jal valToLen
+		sw $v0 0($s0)
+		addiu $v0 $v0 1
+epilog2:	lw $s0 0($sp)
+		addiu $sp $sp 4
+end:		jr $ra
+		
+\end{lstlisting}
+\caption{MIPS Program (Linked List)}
+\end{minipage}
+%
+\end{figure}
+
+\subsection{Instructions}
+Instructions are specific actions that programs can take. MIPS instructions have the following format: \texttt{instruction arg0 arg1 arg2}. Depending on the specific instruction, an instruction may take one, two, or three arguments (such as \texttt{jal},  \texttt{lw}, or \texttt{add}, respectively) but a specific instruction will always take the same number of arguments (e.g.  \texttt{add} always takes three arguments). The MIPS Green Sheet documents every MIPS instruction, telling you what that instruction does as well as other information that will be useful later. Since MIPS runs on a 32 bit architecture, each instruction along with its arguments can be represented with 32 bits and each type of instruction has a specific format of its arguments and those 32 bits. There are three types of MIPS instructions, each with a specific format:
+
+\begin{itemize}
+\item \textbf{R-type}: \texttt{rtype \$rd \$rs \$rt} these instructions take three registers as arguments, with the result of the instruction being stored in \$rd, or the destination register.
+\item \textbf{I-type}: \texttt{itype \$rt \$rs immediate} these instructions take two registers and an immediate as arguments. An immediate is any 16 bit integer (signed or unsigned depending on the instruction), and the result of the instruction is stored in \$rt, or the target register.
+\item \textbf{J-type}: \texttt{jtype LABEL} these instructions take a label as a single argument, and will generally jump the program to the given label in order to continue program execution at the instruction at that label.
+\end{itemize}
+
+Also, note that \textit{instruction} may be used to refer to a specific MIPS instruction (e.g. \texttt{jal, lw, add}) as well as an entire program line with arguments (e.g. \texttt{add \$t0 \$t1 \$t2}).
+
+
+\section{MIPS Instructions \& Programs}
+When writing MIPS programs, there are many useful types of instructions as well as common conventions to make programs clear and organized. Figures 1 and 2 are an example program (in C and in MIPS) that sets the value of each node in a linked list to the number of nodes after that node (e.g. a four node linked list would then have values $3\rightarrow2\rightarrow1\rightarrow0$). We will reference parts of it throughout this section, as we learn more about instructions and MIPS programs. Note: $0$ is often used as the numerical value for \texttt{NULL}.
+
+\subsection{Arithmetic Instructions \& Sign Extension}
+There are specific R-type instructions to carry out each of the basic arithmetic and bitwise operations on two registers, such as addition, subtraction, OR, AND, and XOR. There are also I-type instruction versions of many of these operations that instead take a register and an immediate. 
+
+As shown on the green sheet, all of these instructions will sign extend the given immediate, except for \texttt{ori} and \texttt{andi}, which will zero extend the immediate instead. Since I-type instructions can only take a 16 bit immediate, but register values are 32 bits, the immediate must be extended to 32 bits. That is, bits 0 to 15 of the given 16-bit immediate are bits 0 to 15 of the extended 32-bit immediate, and we must then fill in bits 16 to 31 of the extended immediate. Sign extension means that bits 16 to 31 of the extended immediate will be equal to the most significant bit of the immediate (bit 15), that is the sign bit, while zero extension means bits 16 to 31 are instead always set to 0.
+
+When multiplying two 32 bit integers, it is possible for the product to be greater than 32 bits (but not more than 64 bits). To handle this, the \texttt{mult} instruction will actually split the resulting product between two registers, placing the upper 32 bits (bits 32 to 63) of the product into the special \texttt{\$HI} register and the lower 32 bits (0 to 31) into the special \texttt{\$LO} register. Similarly, division produces both a quotient and a remainder. To handle this, the \texttt{div} instruction will store the quotient into the \texttt{\$LO} register and the remainder into the \texttt{\$HI} register.
+
+\subsection{Memory Instructions}
+As we saw in the last note, programs interact with memory frequently, so MIPS also provides specific instructions to interact with memory. The load instructions load data from memory, while the store instructions store data in memory. Depending on the instruction, the amount of data loaded/stored can be 1 byte (load/store byte), 2 bytes (halfword), or 4 bytes (word). The load and store instructions have the following format: \texttt{inst \$rt offset(\$rs)}, where the value in \texttt{\$rs} is a memory address. Load instructions then load the value in memory at address, \texttt{(address in \$rs) + offset bytes}, into \texttt{\$rt}, while store instructions will store the value in \texttt{\$rt} into the memory at address, \texttt{(address in \$rs) + offset bytes}. You can think of loading/storing as using the derference operator from C, with the value in \texttt{\$rs} being the pointer you want to dereference.
+
+Lines 34-37 of Figure 2 demonstrate using \texttt{lw} and \texttt{sw}, and Figure 3 shows the corresponding data in memory. In this example, node B is the next node after node A, and \texttt{\$s0} contains the address of node A (\texttt{0x8FBAAAE0}). \texttt{lw \$a0 4(\$s0)} then loads the pointer to node B into \texttt{\$a0}, and \texttt{sw \$v0 0(\$s0)} stores the return value of the recursion, 3, into node A's \texttt{val} member. Specifically, \texttt{lw \$a0 4(\$s0)} goes to address \texttt{0x8FBAAAE0 + 4 = 0x8FBAAAE4} and loads the value of the next four bytes of memory at that address into \texttt{\$a0}; \texttt{sw \$v0 0(\$s0)} then goes to address \texttt{0x8FBAAAE0 + 0 = 0x8FBAAAE0} and sets the value of the next four bytes of memory to 3.
+
+\begin{center}
+\begin{bytefield}[bitwidth=1.1em, rightcurly=., rightcurlyspace=0pt]{8}
+\begin{rightwordgroup}{\texttt{0x8FBAAAF0}}
+\bitbox{8}{...}
+\end{rightwordgroup}\\
+\begin{leftwordgroup}{B}
+\begin{rightwordgroup}{struct node* next;}
+\bitboxes{2}{{8F} {BA} {AA} {F0}}
+\end{rightwordgroup}\\
+\begin{rightwordgroup}{int val;}
+\bitboxes{2}{{00} {00} {00} {02}}
+\end{rightwordgroup} 
+\end{leftwordgroup} \\
+\begin{leftwordgroup}{A}
+\begin{rightwordgroup}{struct node* next;}
+\bitboxes{2}{{8F} {BA} {AA} {E8}}
+\end{rightwordgroup}\\
+\begin{rightwordgroup}{int val;}
+\bitboxes{2}{{00} {00} {00} {03}}
+\end{rightwordgroup} 
+\end{leftwordgroup} \\
+\begin{rightwordgroup}{\texttt{0x8FBAAADC}}
+\bitbox{8}{...}
+\end{rightwordgroup}
+\end{bytefield}
+\captionof{figure}{Corresponding memory contents to fig. 2, lines 34-37.}
+\end{center}
+
+\subsection{The Program Counter}
+MIPS programs keep track of the current line that is being executed using a special register, called the \textbf{program counter}, or \textbf{PC}, which simply holds the address of the current line. This is an address in memory in the code segment of memory. When a program executes, the CPU knows which line to execute next by checking the value of the PC, going to that address in memory, and then reading the line stored there. The PC is incremented by 4 bytes (i.e. 32 bits) to the next instruction, after each line, unless an instruction is executed that changes the PC to a different address.
+
+\subsection{Control Flow Instructions}
+The branch instructions can be used to implement the coding constructs that are based on conditionals, such as if statements and while/for loops. Both \texttt{branch equal (beq)} and \texttt{branch not equal (bne)} have the following format: \texttt{branch \$rs \$rt LABEL}. For \texttt{beq}, the branch will be taken (i.e. the Program Counter will be set to the address of the label and the instruction at the label will be executed next) if \texttt{\$rs} is equal to \texttt{\$rt}, otherwise the branch is not taken (i.e. simply the next sequential line is executed). For \texttt{bne}, the branch is taken if the two registers are not equal to each other. 
+
+The branch instructions can implement an if-else statement by branching to the "true/false" block of code, and otherwise executing the "other" block of code. Similarly, the branch instructions can implement while/for loops by branching to the beginning of the loop if the condition is still true. Figures 4 and 5 show an example of both from the linked list program.
+
+In addition to the branch instructions, the set less than instructions (\texttt{slt, slti, sltu, sltiu}) are also useful for comparisons for conditionals. These instructions will compare a register to an immediate or another register. If the register is less then the immediate/other register, the target/destination register will be set to 1, otherwise it will be set to 0.
+
+\begin{figure}
+\centering
+\begin{minipage}{0.4\textwidth}
+\renewcommand{\ttdefault}{pcr}
+\begin{lstlisting}[language=C, basicstyle=\ttfamily]
+while (len > 0) {
+  cur->next = getNode();
+  cur = cur->next;
+  len -= 1;
+}
+
+if (nd == NULL)
+  return 0;
+else {
+  nd->val = valToLen(nd->next);
+  return 1 + nd->val;
+}
+\end{lstlisting}
+\caption{if/else \& while loop in C.}
+\vfill
+\end{minipage}\hfill
+%
+\begin{minipage}{0.4\textwidth}
+\raggedright
+\renewcommand{\ttdefault}{pcr}
+\begin{lstlisting}[language=C, basicstyle=\ttfamily, keywordstyle=\bfseries, showstringspaces=false, morekeywords={jal, addu, move, bne, j, sw, addiu, lw, jr}]
+loop:		jal getNode
+		sw $v0 4($s2)
+		lw $s2 4($s2)
+		addiu $s0 $s0 -1
+		bne $s0 $0 loop
+		move $v0 $s1
+		...
+if_:		bne $t0 $0 prolog2
+		move $v0 $0
+		j end
+		...
+else_:		move $s0 $a0
+		lw $a0 4($s0)
+recurse:	jal valToLen
+		addiu $t0 $v0 1
+		sw $t0 0($s0)
+		move $v0 $t0		
+\end{lstlisting}
+\caption{corresponding code in MIPS.}
+\end{minipage}
+%
+
+\end{figure}
+
+\subsection{Signed vs. Unsigned}
+Many instructions have both a signed and unsigned version. For example, \texttt{addi} and \texttt{addiu}. Unfortunately, the meaning of signed/unsigned depends on the specific instruction and is often not what you'd think. 
+
+For the arithmetic instructions, both registers are considered as signed numbers, and unsigned indicates that signed overflow should not stop execution while signed indicates that signed overflow should stop execution. 
+
+For the load instructions, since loading halfwords and bytes of data into 32 bit registers requires the halfword/byte to be expanded to 32 bits, signed indicates that the loaded halfword/byte will be sign extended, while unsigned indicates that the halfword/byte will be zero extended. 
+
+For the set less than instructions, signed indicates to consider the registers as signed integers while unsigned indicates to consider the registers as unsigned integers.
+
+\subsection{Jump Instructions and Function Calls}
+Like branch instructions, jump instructions can be used to redirect the program from executing the next sequential line to another line identified by a label. Jump, or \texttt{j LABEL}, does just that by setting the Program Counter to the address of the given label. This jumping behavior is useful for executing function calls by jumping to the program line where the function body begins.
+
+However, for most programs, if the program's current code block calls a function, then after the function call, the next line in the code block should be executed. Therefore, it is useful to save the return address before we jump into a function call, so that after the function call finishes, the program will know the address of the line to execute next. 
+
+Jump and link, or \texttt{jal LABEL}, performs this behavior by first storing the address of the next line to execute (i.e. the current value of the Program Counter plus 4 bytes) into the return address register, \texttt{\$ra}, and then jumping to the given label. After the function call finishes, the program then simply needs to set the Program Counter to the value in \texttt{\$ra}. Jump register, or \texttt{jr \$rs}, is usually used to do this, as it sets the Program Counter equal to the value in \texttt{\$rs}.  Figure 6 shows a snippet of the linked list program that calls various functions.
+
+Lastly, jump and link register, or \texttt{jalr \$rs}, can be used to jump to the address in \texttt{\$rs} while also setting the value of \texttt{\$ra} to the Program Counter plus 4 bytes.
+
+In addition to jumping to the function body, a program must also pass arguments and obtain the return value of the function when executing a function call. To pass arguments, argument values are stored in the \texttt{\$a registers} before jumping to the function body. The function body will then store the return value of the function into \texttt{\$v0} before returning (i.e. executing \texttt{jr \$ra}). Figure 6 shows an example of this argument passing and return value storing.
+\begin{center}
+\renewcommand{\ttdefault}{pcr}
+\begin{lstlisting}[language=C, basicstyle=\ttfamily, keywordstyle=\bfseries, showstringspaces=false, morekeywords={jal, addu, move, bne, j, sw, addiu, lw, jr}]
+main:		addiu $a0 $0 4	#set len arg of initLL to 4
+		jal initLL	#call initLL
+		addu $s0 $v0 $0	#store retval in $s0
+		move $a0 $s0	#set nd arg of valToLen
+		jal valToLen	#call valToLen
+		...
+		lw $a0 4($s0)	#set nd arg of valToLen
+recurse:	jal valToLen	#call valToLen
+		addiu $t0 $v0 1
+		sw $t0 0($s0)
+		move $v0 $t0	#set return value
+		...
+		jr $ra		# return to previous recurse call
+\end{lstlisting}
+\captionof{figure}{Function calls.}
+\end{center}
+
+\subsection{Calling Convention}
+Programs are complex, and it is unlikely that the entire program could be executed using only up to 32 intermediate values at a time (since there are only 32 registers). Additionally, due to the specific purposes of different registers, function are likely to use the same registers in their function bodies; this creates problems when a function needs to preserve values in certain registers but also needs to call another function that may change the values of those registers. 
+
+For example, in our linked list program, a call to \texttt{valToLen} will need to remember the value of its \texttt{nd} arg (stored in \texttt{\$a0}) to eventually set \texttt{nd->val}, but before that, the recursive call to \texttt{valToLen} will require the value of \texttt{\$a0} to be changed to \texttt{nd->next}.
+
+MIPS provides a calling convention in order to solve this problem and clearly coordinate which registers' contents will be preserved across function calls. During a function call, the line (and surrounding code section) that calls the function is the \textit{caller}, while the function being called is the \textit{callee}. The caller can trust that the values of the registers below will remain the same after the function call, and that if the callee needs to use those registers, the callee will save and restore those registers' values by the end of the function call. Every other register's value may not be preserved after the function call, and therefore the callee may freely change the values of these registers without needing to save and restore them later.
+\begin{center}
+ \begin{tabular}{||c c||} 
+ \hline
+ \textbf{Saved} & \textbf{Not Saved}\\
+ \hline
+ \texttt{\$s registers} & \texttt{\$t registers}\\ 
+ \texttt{\$sp} & \texttt{\$a registers} \\
+ \texttt{\$fp} & \texttt{\$v registers}\\ 
+ \texttt{\$gp} & \texttt{\$k registers}\\ 
+ \texttt{\ } & \texttt{\$ra}\\ 
+ \texttt{\ } & \texttt{\$at}\\ 
+ \hline
+\end{tabular}
+\captionof{figure}{Calling Convention registers}
+\end{center}
+
+
+To actually save and restore these register values, the values are stored onto the stack before the actual logic of the function and then loaded back into the matching registers after the function logic is complete (but before returning). These sections of MIPS functions are called the \textbf{prologue} and \textbf{epilogue}. In the prologue, to reserve space on the stack, the stack pointer is \textit{decremented} by $k$ bytes, where $k$ is the number of registers to save multiplied by 4. The value of the first register to save is then stored on the stack at \texttt{0(\$sp)}, the next at \texttt{4(\$sp)}, and so on and so forth. The order that the registers are saved in does not matter, as long as they are restored in the same order in the epilogue. The epilogue then reverses the effects of the prologue, by loading the values from the stack back into the matching registers, and then \textit{incrementing} the stack pointer back to its original value. Program B shows an example of a prologue and epilogue.
+\begin{center}
+\renewcommand{\ttdefault}{pcr}
+\begin{lstlisting}[language=C, basicstyle=\ttfamily, keywordstyle=\bfseries, showstringspaces=false, morekeywords={jal, addu, move, bne, j, sw, addiu, lw, jr}]
+prolog1:  	addiu $sp $sp -12  #decrement stack pointer
+		sw $s0 0($sp)
+		sw $s1 4($sp)
+		sw $s2 8($sp)
+		... 			   # do stuff
+epilog1:	lw $s2 8($sp)
+		lw $s1 4($sp)
+		lw $s0 0($sp)
+		addiu $sp $sp 8  # increment stack pointer
+done:		jr $ra 
+\end{lstlisting}
+\captionof{figure}{A prologue and epilogue.}
+\end{center}
+During the prologue, the callee need only save the register values of the registers that the callee will change during the function call. For example, even though all \texttt{\$s registers} must be preserved, if the callee never changes the value of \texttt{\$s0} then the callee does not need to save the value of \texttt{\$s0} on the stack. This also means that if only say \texttt{\$t registers} are used in a function body, then no register values need to be saved and no prologue and epilogue is necessary. However, when writing a function body, it doesn't hurt to save every (non \texttt{\$t}) register that you will use to guarantee that the callee will not compromise the caller (for this reason, you might sometimes see prologues that do save the \texttt{\$a registers}).
+
+\subsection{Pseudoinstructions}
+All of the above instructions are \textbf{True Assembly Language (TAL)}, meaning that the instructions are built into the MIPS ISA. However, other instructions exist that are not built into the MIPS ISA, but perform common behavior, such as moving a register's value into another register. These other instructions are called \textbf{pseudoinstructions}, which are shortcut instructions that the assembler will later expand into actual instructions. Along with the TAL instructions, these pseudoinstructions make up \textbf{Machine Assembly Language (MAL)}. All of the MIPS pseudoinstructions can be found under the pseudoinstructions set section of the MIPS green sheet.
+
+Pseudoinstructions may simply substitute for one instruction (e.g. \texttt{move \$rd \$rs} is expanded to \texttt{addu \$rd \$rs \$0}), or for multiple instructions. For an example of the latter, the \texttt{li \$rd imm} instruction loads a 32 bit immediate into a register. Since the immediate of an I-Type instruction is only 16 bits, the compiler will expand \texttt{li \$rd imm} into two instructions: 1) \texttt{lui \$rd imm[31:16]}, which will load the upper 16 bits of the immediate into the register; 2) \texttt{ori \$rd \$rd imm[15:0]}, which will then "load" the lower 16 bits of the immediate.
+
+\section{Converting MIPS to binary}
+We've learned how to convert C programs into a smaller set of MIPS instructions, and now we'll see how to convert any MIPS instruction to its binary representation. By converting each instruction of a MIPS program into binary, we can then store the binary into memory at the code segment. For all instructions, the registers used are represented by their register number (listed on the Green Sheet). For example, \texttt{\$t1} is register 17 and would be represented as 0b10001.
+
+\subsection{R-Type}
+R-Type instructions have the format below. They can be identified by their opcode field with value zero, and each has a unique funct field. 
+\begin{center}
+\begin{bytefield}[endianness=big]{32}
+         \bitheader{0,5,6,10,11,15,16,20,21,25,26,31} \\
+         \bitbox{6}{opcode} & \bitbox{5}{\$rs} & \bitbox{5}{\$rt} & \bitbox{5}{\$rd}
+         & \bitbox{5}{shamt} & \bitbox{6}{funct} \\
+\end{bytefield}
+\end{center}
+
+\begin{itemize}
+\item \textit{opcode}|unused for R-type instructions, this field is always all zeroes for R-type instructions
+\item \textit{\$rs, \$rt, \$rd}|corresponding number of the register used. Since there are 32 different registers, five bits are necessary to represent all possible register numbers. If an instruction does not use one of these registers (\texttt{\$rs, \$rt, \$rd}), then its corresponding field can be anything (usually all zeroes).
+\item \textit{shamt}|used only for \texttt{sll}, \texttt{srl}, and \texttt{sra}, this field indicates the number of bits to shift. Since there are 32 bits in a register, five bits are necessary to represent all possible number of bits to shift by. If an instruction is not a shift instruction, this field can be anything (usually all zeroes).
+\item \textit{funct}|identifies the specific R-type instruction, the Green Sheet documents the funct field for each R-type instruction.
+\end{itemize}
+
+\subsection{I-Type}
+I-Type instructions have the format below. They can be identified by their nonzero opcode field.
+\begin{center}
+\begin{bytefield}[endianness=big]{32}
+         \bitheader{0,15,16,20,21,25,26,31} \\
+         \bitbox{6}{opcode} & \bitbox{5}{\$rs} & \bitbox{5}{\$rt}
+         & \bitbox{16}{immediate} \\
+\end{bytefield}
+\end{center}
+
+\begin{itemize}
+\item \textit{opcode} identifies the specific I-type instruction, the Green Sheet documents the opcode field for each I-type instruction.
+\item \textit{\$rs, \$rt} corresponding number of the register used. Since there are 32 different registers, five bits are necessary to represent all possible register numbers.
+\item \textit{immediate} value of the immediate used in the instruction (this is why immediates have to be 16 bits!). For memory instructions, the offset corresponds to the value of this immediate field. For branch instructions, the value of the immediate field is the number of lines away from the PC that the given label is, or $(PC\  addr. - label \ addr.) / 4$, and is calculated after compilation (explained in detail in Assembler).
+\end{itemize}
+
+\subsection{J-Type}
+J-Type instructions have the format below. There are only two J-type instructions: \texttt{j} and \texttt{jal} with opcodes 0x02 and 0x03 respectively. \texttt{jr} and \texttt{jalr} are actually R-type instructions!
+\begin{center}
+\begin{bytefield}[endianness=big]{32}
+         \bitheader{0,25,26,31} \\
+         \bitbox{6}{opcode} & \bitbox{26}{address} \\
+\end{bytefield}
+\end{center}
+
+\begin{itemize}
+\item \textit{opcode} either 0x02 or 0x03
+\item \textit{address} the 26 bit truncation of the address of the label, specifically bits 2 to 27 of the label address. The full address to jump to can then be computed by concatenating the four leftmost bits of the PC to these given 26 bits and multiplying by 4; or, as $PC[31:28] \| addr. value \| 00$, where $\|$ indicates concatenation and PC[31:28] is bits 28 to 31 of the current PC address.\footnote{For example, if the current PC address was 0x3080004C and the value of the address field was 0x18FCFC0 (or 0b01,1000,1111,1110,1111,1110,0000) then the label address to jump to would be: $0011 | 01,1000,1111,1110,1111,1110,0000 | 00$ = $0b0011,0110,0011,1111,1011,1111,1000,0000$ or 0x363FBF80.}
+\end{itemize}
+
+\section{CALL: Translating C programs to Binary}
+Now that we know how to translate C programs to MIPS programs and then into binary, we can now understand the exact stages that actually perform these translations and how they do so. The following four stages are how the \texttt{gcc} command takes in your C file and outputs an executable!
+
+\subsection{Compiler}
+\begin{itemize}
+\item \textit{Input:} C code (a .c file)
+\item \textit{Output:} MAL (a .s file)
+\end{itemize}
+In this stage, the C program is compiled into MAL, or MIPS instructions that may include pseudoinstructions as well. In general, this stage will compile a high level language into assembly language that the assembler understands.
+
+\subsection{Assembler}
+\begin{itemize}
+\item \textit{Input:} MAL (a .s file)
+\item \textit{Output:} Object code as TAL + information tables (a .o file)
+\end{itemize}
+In this stage, the intermediate file from the compiler is assembled into an object file. Pseudoinstructions are expanded, and the intermediate file is organized into specific sections, such as the text segment, the data segment, and relocation information. Two important information tables are also constructed that contain information on the labels that are present in the program and need to be resolved. The two most relevant tables are the \textbf{symbol table}, which tracks where labels can be found in the intermediate file, and the \textbf{relocation table}, which tracks the lines of the file that need labels to be resolved to numerical values. Figures 9 and 10 show examples of these two tables for our linked list program.
+
+Specifically, the symbol table maps labels to the relative address of the line matching the label. The address is relative because it is relative to the beginning of the given intermediate file, and the absolute address of the line may change when all intermediate files are combined into a single file. The relocation table maps relative addresses to the label that is used in that line. 
+
+After constructing these two tables (in one pass over the intermediate file), the assembler can take a second pass over the intermediate file to resolve the labels in branch instructions to numerical values. As the assembler reads each line of the intermediate file, it can check if the current line's address is present in the relocation table. If the line is present, then the assembler can look for that label in the symbol table, find the address corresponding to the label, and calculate the immediate of the branch instruction as: $(current \ line \ address - label \ address) / 4$.
+
+\begin{figure}
+\centering
+\begin{minipage}{0.4\textwidth}
+ \begin{tabular}{||c c||} 
+ \hline
+ \textbf{Label} & \textbf{Address}\\
+ \hline
+ \texttt{main} & Line 1 = \texttt{0x00}\\ 
+ \texttt{initLL} & Line 6 = \texttt{0x05} \\
+ \texttt{prolog1} & Line 9 = \texttt{0x09}\\ 
+ \texttt{loop} & Line 14 = \texttt{0x0e}\\ 
+ \texttt{epilog1} & \texttt{0x14}\\ 
+ \texttt{done} & \texttt{0x17}\\ 
+ \texttt{valToLen} & \texttt{0x18}\\ 
+ \texttt{if\_} & \texttt{0x19}\\ 
+ \texttt{prolog2} & \texttt{0x1c}\\ 
+ \texttt{else\_} & \texttt{0x1e}\\ 
+ \texttt{recurse} & \texttt{0x20}\\ 
+ \texttt{epilog2} & \texttt{0x24}\\ 
+ \texttt{end} & \texttt{0x26}\\    
+ \hline
+\end{tabular}
+\caption{Symbol Table}
+\vfill
+\end{minipage}\hfill
+%
+\begin{minipage}{0.4\textwidth}
+\raggedright
+ \begin{tabular}{||c c||} 
+ \hline
+ \textbf{Address} & \textbf{Label Used}\\
+ \hline
+Line 1 = \texttt{0x00} & \texttt{initLL}\\ 
+Line 5 = \texttt{0x04} & \texttt{valToLen}\\  
+Line 8 = \texttt{0x07} & \texttt{done}\\ 
+Line 14 = \texttt{0x0c} & \texttt{getNode}\\ 
+\texttt{0x12} & \texttt{loop}\\ 
+\texttt{0x19} & \texttt{prolog2}\\
+\texttt{0x20} & \texttt{valToLen}\\  
+ \hline
+\end{tabular}
+\caption{Relocation Table}
+\end{minipage}
+%
+
+\end{figure}
+\newpage
+\subsection{Linker}
+\begin{itemize}
+\item \textit{Input:} multiple object code files + information tables (a .o file)
+\item \textit{Output:} a single executable file (a .out file)
+\end{itemize}
+In this stage, the multiple object files (corresponding to the multiple C files comprising the program) are linked into a single executable file. This is done by combining the object files' different text segments and different data segments into a single text segment and single data segment. 
+
+Additionally, now that all of these object files are now merged as a single file, the new address of a line is now its absolute address and the labels in jump instructions can be resolved to absolute addresses. Like for branch instructions, the linker can pass over the merged file to find jump instructions that need resolution and the labels they use with the relocation table, and then find the labels' relative addresses with the symbol table. Since the linker knows both the length of each text and data segment and the ordering of each segment, it can then calculate the absolute address of any label from its relative address (assuming that the first line of the text segment starts at 0x40000000). After calculating the absolute address, the actual address value for the instruction is computed as bits 2 to 27 of the absolute address.
+\subsection{Loader}
+\begin{itemize}
+\item \textit{Input:} executable file (a .out file)
+\item \textit{Output:} a running program!
+\end{itemize}
+Finally, in this stage, the executable file is loaded into memory and the loader (the operating system) will read the executable file (i.e. the text segment) and execute the program.
+
+\end{document}
